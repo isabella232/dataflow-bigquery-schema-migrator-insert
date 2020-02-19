@@ -17,13 +17,12 @@ repositories {
 }
 
 dependencies {
-    compile("org.apache.beam:beam-sdks-java-core:$beamVersion")
-    compile("org.apache.beam:beam-sdks-java-io-google-cloud-platform:$beamVersion")
-    compile("org.slf4j:slf4j-api:$slf4jVersion")
-    compile('com.google.cloud:google-cloud-bigquery:1.106.0')
-
-    runtime("org.slf4j:slf4j-jdk14:$slf4jVersion")
-    runtime("org.apache.beam:beam-runners-direct-java:$beamVersion")
+    implementation("org.apache.beam:beam-sdks-java-core:$beamVersion")
+    implementation("org.apache.beam:beam-runners-direct-java:$beamVersion")
+    implementation("org.apache.beam:beam-sdks-java-io-google-cloud-platform:$beamVersion")
+    implementation('com.google.cloud:google-cloud-bigquery:1.106.0')
+    implementation("org.slf4j:slf4j-jdk14:$slf4jVersion")
+    implementation("org.slf4j:slf4j-api:$slf4jVersion")
 
     // Use JUnit test framework
     testImplementation("junit:junit:4.12")
@@ -38,7 +37,7 @@ jar {
     manifest {
         attributes 'Main-Class': mainClassName,
         'Implementation-Version': version,
-        'Class-Path': configurations.runtime.files.collect { "lib/$it.name" }.join(' ')
+        'Class-Path': configurations.runtimeClasspath.files.collect { "lib/$it.name" }.join(' ')
     }
  from(configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }) {}
 }
@@ -69,10 +68,6 @@ jacocoTestCoverageVerification {
             }
         }
     }
-}
-
-googleJavaFormat {
-    include '.gradle/*'
 }
 
 check.dependsOn jacocoTestReport

@@ -9,6 +9,8 @@ import org.apache.beam.sdk.values.ValueInSingleWindow;
 public final class JsonToDestinationTable {
   public static TableDestination getTableName(
       final ValueInSingleWindow<TableRow> tableRow,
+      final String projectName,
+      final String datasetName,
       final String tableNameAttr,
       final String failOverTableName) {
     final String tableDest =
@@ -16,6 +18,7 @@ public final class JsonToDestinationTable {
             .getOrDefault(tableNameAttr, failOverTableName)
             .toString();
 
-    return new TableDestination(tableDest, "Automatically created");
+    return new TableDestination(
+        String.format("%s:%s.%s", projectName, datasetName, tableDest), "Automatically created");
   }
 }

@@ -2,20 +2,31 @@ package com.doit.schemamigration;
 
 import static com.doit.schemamigration.Parsers.JsonToTableRow.convert;
 import static com.doit.schemamigration.Parsers.TableRowToSchema.convertToSchema;
+import static com.google.cloud.bigquery.BigQueryOptions.DefaultBigQueryFactory;
+import static com.google.cloud.bigquery.BigQueryOptions.newBuilder;
 import static java.util.stream.Collectors.toList;
 import static org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED;
 import static org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.SchemaUpdateOption.ALLOW_FIELD_ADDITION;
 import static org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.SchemaUpdateOption.ALLOW_FIELD_RELAXATION;
 import static org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.WriteDisposition.WRITE_APPEND;
-import static org.apache.beam.sdk.io.gcp.bigquery.InsertRetryPolicy.retryTransientErrors;
+import static org.apache.beam.sdk.io.gcp.bigquery.InsertRetryPolicy.neverRetry;
 import static org.apache.beam.sdk.io.gcp.pubsub.PubsubIO.readStrings;
 
 import com.doit.schemamigration.Parsers.JsonToDestinationTable;
+import com.doit.schemamigration.Transforms.MergeWithTableSchema;
+import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
+import com.google.api.services.bigquery.model.TableSchema;
+import com.google.cloud.bigquery.BigQuery;
+import com.google.cloud.bigquery.DatasetInfo;
+import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.Schema;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
+import org.apache.beam.repackaged.core.org.antlr.v4.runtime.misc.OrderedHashSet;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.coders.CoderRegistry;
 import org.apache.beam.sdk.io.gcp.bigquery.*;
@@ -32,6 +43,25 @@ class Main {
     final PipelineHelperOptions options =
         PipelineOptionsFactory.fromArgs(args).withValidation().as(PipelineHelperOptions.class);
     options.setStreaming(true);
+    final String topicString =
+        String.format("projects/%s/topics/%s", options.getProject(), options.getInputTopic());
+
+    // Ensure Dataset exists in bigquery
+    final String projectName = options.getProject();
+    final String datasetName = options.getTargetDataset();
+    final BigQuery bigQuery =
+        new DefaultBigQueryFactory().create(newBuilder().setProjectId(projectName).build());
+
+    if (bigQuery.getDataset(datasetName) == null) {
+      bigQuery.create(DatasetInfo.of(datasetName));
+    }
+
+    final String targetTableAtt = options.getJsonAttributeForTargetTableName();
+    final String failOverTable =
+        String.format("%s:%s.%s", projectName, datasetName, options.getFailOverTableName());
+    final List<TableFieldSchema> fields = new ArrayList<>();
+    fields.add(new TableFieldSchema().setName(targetTableAtt).setType("STRING"));
+    final TableSchema dummySchema = new TableSchema().setFields(fields);
 
     final Pipeline pipeline = Pipeline.create(options);
     // This ensures dataflow can encode and decode BigQueryInsertErrors
@@ -40,7 +70,7 @@ class Main {
         TypeDescriptor.of(BigQueryInsertError.class), BigQueryInsertErrorCoder.of());
 
     final PCollection<TableRow> pubSubData =
-        pubSubToJson(pipeline, readStrings().fromTopic(options.getInputTopic()));
+        pubSubToJson(pipeline, readStrings().fromTopic(topicString));
 
     final PCollection<BigQueryInsertError> failedInserts =
         pubSubData
@@ -50,15 +80,14 @@ class Main {
                     .to(
                         (input) ->
                             JsonToDestinationTable.getTableName(
-                                input,
-                                options.getTargetTableName(),
-                                options.getFailOverTableName()))
+                                input, projectName, datasetName, targetTableAtt, failOverTable))
                     .withCreateDisposition(CREATE_IF_NEEDED)
+                    .withSchema(dummySchema)
                     .withWriteDisposition(WRITE_APPEND)
                     .withSchemaUpdateOptions(
                         EnumSet.of(ALLOW_FIELD_ADDITION, ALLOW_FIELD_RELAXATION))
                     .withExtendedErrorInfo()
-                    .withFailedInsertRetryPolicy(retryTransientErrors()))
+                    .withFailedInsertRetryPolicy(neverRetry()))
             .getFailedInsertsWithErr();
 
     failedInserts
@@ -68,7 +97,17 @@ class Main {
             Window.<KV<String, Schema>>into(
                     FixedWindows.of(Duration.standardMinutes(options.getWindowSize())))
                 .withAllowedLateness(Duration.ZERO))
-        .apply("Combine by Schema", Combine.perKey(new CombineBySchema()));
+        .apply("Combine by Schema", Combine.perKey(new CombineBySchema()))
+        .apply(
+            "Merge with target table schema", new MergeWithTableSchema(projectName, datasetName));
+
+    // Send failed rows back to pubsub
+    failedInserts
+        .apply(
+            "Get Table Data",
+            MapElements.into(TypeDescriptor.of(String.class))
+                .via((BigQueryInsertError item) -> item.getRow().toString()))
+        .apply("Send Back to pubsub", PubsubIO.writeStrings().to(topicString));
 
     pipeline.run();
   }
@@ -80,8 +119,10 @@ class Main {
           .reduce(
               Schema.of(),
               (Schema a, Schema b) -> {
-                a.getFields().addAll(b.getFields());
-                return a;
+                final OrderedHashSet<Field> fields = new OrderedHashSet<>();
+                fields.addAll(a.getFields());
+                fields.addAll(b.getFields());
+                return Schema.of(fields);
               });
     }
   }
@@ -91,7 +132,7 @@ class Main {
     public void processElement(
         @Element BigQueryInsertError error, OutputReceiver<KV<String, Schema>> out) {
       // Use OutputReceiver.output to emit the output element.
-      out.output(KV.of(error.getTable().toString(), convertToSchema(error.getRow())));
+      out.output(KV.of(error.getTable().getTableId(), convertToSchema(error.getRow())));
     }
   }
 

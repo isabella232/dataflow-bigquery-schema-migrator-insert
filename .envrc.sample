@@ -5,3 +5,5 @@ set -a
 ###
 git config --local user.email <your email>
 git config --local user.name <your username>
+
+export GOOGLE_APPLICATION_CREDENTIALS="key.json"

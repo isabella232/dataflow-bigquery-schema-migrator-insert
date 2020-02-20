@@ -4,6 +4,7 @@ import static com.google.cloud.bigquery.BigQueryOptions.newBuilder;
 
 import com.google.cloud.bigquery.*;
 import java.util.ArrayList;
+import java.util.Optional;
 import org.apache.beam.repackaged.core.org.antlr.v4.runtime.misc.OrderedHashSet;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.PTransform;
@@ -37,18 +38,26 @@ public class MergeWithTableSchema
     final Logger logger = LoggerFactory.getLogger(MergeSchema.class);
 
     @ProcessElement
-    public void processElement(ProcessContext c) {
+    public void processElement(final ProcessContext c) {
       final KV<String, Schema> tableAndSchema = c.element();
       final TableId tableId = TableId.of(datasetName, tableAndSchema.getKey());
-      final Table targetTable = bigQuery.getTable(tableId);
-      logger.info(String.format("Target tale is: %s", targetTable));
-      if (targetTable != null) {
-        updateTargetTableSchema(tableAndSchema.getValue(), targetTable);
-      } else {
-        bigQuery.create(
-            TableInfo.of(tableId, StandardTableDefinition.of(tableAndSchema.getValue())));
+      final Optional<Table> targetTable = getOrCreateTable(tableId, tableAndSchema.getValue());
+      if (targetTable.isPresent()) {
+        final Table table = targetTable.get();
+        logger.info("Target table is: {}", table);
+        updateTargetTableSchema(tableAndSchema.getValue(), table);
       }
       c.output(tableAndSchema);
+    }
+
+    public Optional<Table> getOrCreateTable(final TableId tableId, final Schema Schema) {
+      try {
+        return Optional.of(bigQuery.getTable(tableId));
+      } catch (BigQueryException | NullPointerException e) {
+        logger.info("Creating table: {}", tableId.getTable());
+        bigQuery.create(TableInfo.of(tableId, StandardTableDefinition.of(Schema)));
+      }
+      return Optional.empty();
     }
   }
 
@@ -59,15 +68,15 @@ public class MergeWithTableSchema
     fields.addAll(targetTableSchema != null ? targetTableSchema.getFields() : new ArrayList<>());
 
     if (targetTableSchema != null && fields.size() > targetTableSchema.getFields().size()) {
-      logger.info("New schema created");
-      logger.info(String.format("New schema is: %s", fields.toString()));
-      targetTable
-          .toBuilder()
-          .setTableId(targetTable.getTableId())
-          .setDefinition(StandardTableDefinition.of(Schema.of(fields)))
-          .build();
+      logger.info("New schema is: {}", fields.toString());
+      final Table updatedTable =
+          targetTable
+              .toBuilder()
+              .setTableId(targetTable.getTableId())
+              .setDefinition(StandardTableDefinition.of(Schema.of(fields)))
+              .build();
       try {
-        targetTable.update();
+        updatedTable.update();
       } catch (BigQueryException e) {
         logger.error("Failed to add column");
         throw new IllegalStateException(e);

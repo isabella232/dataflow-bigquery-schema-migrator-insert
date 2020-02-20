@@ -23,6 +23,12 @@ public interface PipelineHelperOptions extends PipelineOptions, StreamingOptions
 
   void setJsonAttributeForTargetTableName(final String value);
 
+  @Description("The name of json attribute for processed time to be stored in")
+  @Default.String("processed_timestamp")
+  String getJsonAttributeForProccess();
+
+  void setJsonAttributeForProccess(final String value);
+
   @Description("The name of the full failure table.")
   @Required
   String getFailOverTableName();
@@ -30,7 +36,7 @@ public interface PipelineHelperOptions extends PipelineOptions, StreamingOptions
   void setFailOverTableName(final String value);
 
   @Description("Time to consolidate Schema errors")
-  @Default.Integer(3)
+  @Default.Integer(1)
   Integer getWindowSize();
 
   void setWindowSize(final Integer value);

@@ -2,6 +2,7 @@ package com.doit.schemamigration;
 
 import static com.doit.schemamigration.Parsers.JsonToTableRow.convert;
 import static com.doit.schemamigration.Parsers.TableRowToSchema.convertToSchema;
+import static com.doit.schemamigration.Parsers.TableRowToSchema.dateTimeFormatter;
 import static com.google.cloud.bigquery.BigQueryOptions.DefaultBigQueryFactory;
 import static com.google.cloud.bigquery.BigQueryOptions.newBuilder;
 import static java.util.stream.Collectors.toList;
@@ -14,6 +15,7 @@ import static org.apache.beam.sdk.io.gcp.pubsub.PubsubIO.readStrings;
 
 import com.doit.schemamigration.Parsers.JsonToDestinationTable;
 import com.doit.schemamigration.Transforms.MergeWithTableSchema;
+import com.google.api.client.googleapis.util.Utils;
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
@@ -37,17 +39,21 @@ import org.apache.beam.sdk.transforms.windowing.FixedWindows;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.*;
 import org.joda.time.Duration;
+import org.joda.time.Instant;
 
 class Main {
   public static void main(String[] args) {
     final PipelineHelperOptions options =
         PipelineOptionsFactory.fromArgs(args).withValidation().as(PipelineHelperOptions.class);
     options.setStreaming(true);
-    final String topicString =
-        String.format("projects/%s/topics/%s", options.getProject(), options.getInputTopic());
+    final String projectName = options.getProject();
+    final String topicName = options.getInputTopic();
+    final String subscription =
+        String.format("projects/%s/subscriptions/%s", projectName, topicName);
+    final String topic = String.format("projects/%s/topics/%s", projectName, topicName);
+    final String processedTimeJsonField = options.getJsonAttributeForProccess();
 
     // Ensure Dataset exists in bigquery
-    final String projectName = options.getProject();
     final String datasetName = options.getTargetDataset();
     final BigQuery bigQuery =
         new DefaultBigQueryFactory().create(newBuilder().setProjectId(projectName).build());
@@ -70,7 +76,8 @@ class Main {
         TypeDescriptor.of(BigQueryInsertError.class), BigQueryInsertErrorCoder.of());
 
     final PCollection<TableRow> pubSubData =
-        pubSubToJson(pipeline, readStrings().fromTopic(topicString));
+        pubSubToJson(
+            pipeline, processedTimeJsonField, readStrings().fromSubscription(subscription));
 
     final PCollection<BigQueryInsertError> failedInserts =
         pubSubData
@@ -106,8 +113,13 @@ class Main {
         .apply(
             "Get Table Data",
             MapElements.into(TypeDescriptor.of(String.class))
-                .via((BigQueryInsertError item) -> item.getRow().toString()))
-        .apply("Send Back to pubsub", PubsubIO.writeStrings().to(topicString));
+                .via(
+                    (BigQueryInsertError item) -> {
+                      final TableRow tableRow = item.getRow();
+                      tableRow.setFactory(Utils.getDefaultJsonFactory());
+                      return tableRow.toString();
+                    }))
+        .apply("Send Back to pubsub", PubsubIO.writeStrings().to(topic));
 
     pipeline.run();
   }
@@ -137,16 +149,23 @@ class Main {
   }
 
   public static PCollection<TableRow> pubSubToJson(
-      final Pipeline pipeline, PubsubIO.Read<String> stringRead) {
+      final Pipeline pipeline,
+      final String processedTimeJsonField,
+      PubsubIO.Read<String> stringRead) {
     return pipeline
         .apply("Read PubSub Messages", stringRead)
         .apply(
-            "Convert data to json",
+            "Convert data to json and add process timestamp",
             FlatMapElements.into(TypeDescriptor.of(TableRow.class))
                 .via(
                     (String ele) ->
                         Stream.of(convert(ele))
                             .filter(tableRow -> !tableRow.isEmpty())
+                            .peek(
+                                tableRow ->
+                                    tableRow.putIfAbsent(
+                                        processedTimeJsonField,
+                                        dateTimeFormatter.print(Instant.now())))
                             .collect(toList())));
   }
 }

@@ -15,6 +15,7 @@ public class MergeWithTableSchemaTest {
 
   @Before
   public void setup() {
+    mergeWithTableSchema.bigQuery = mock(BigQuery.class);
     mergeWithTableSchema = new MergeWithTableSchema("test", "test");
   }
 

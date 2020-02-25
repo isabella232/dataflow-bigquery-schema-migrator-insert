@@ -17,7 +17,7 @@ public class MergeWithTableSchema
     extends PTransform<PCollection<KV<String, Schema>>, PCollection<KV<String, Schema>>> {
   final String projectName;
   final String datasetName;
-  static BigQuery bigQuery = BigQueryOptions.getDefaultInstance().getService();
+  public static BigQuery bigQuery;
   final Logger logger = LoggerFactory.getLogger(MergeWithTableSchema.class);
 
   public MergeWithTableSchema(final String projectName, final String datasetName) {

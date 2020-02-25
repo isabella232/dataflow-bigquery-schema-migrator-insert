@@ -19,6 +19,7 @@ repositories {
 dependencies {
     implementation("org.apache.beam:beam-sdks-java-core:$beamVersion")
     implementation("org.apache.beam:beam-runners-direct-java:$beamVersion")
+    implementation("org.apache.beam:beam-runners-google-cloud-dataflow-java:$beamVersion")
     implementation("org.apache.beam:beam-sdks-java-io-google-cloud-platform:$beamVersion")
     implementation('com.google.cloud:google-cloud-bigquery:1.106.0')
     implementation("org.slf4j:slf4j-jdk14:$slf4jVersion")
@@ -30,7 +31,7 @@ dependencies {
     testImplementation("org.mockito:mockito-core:2.19.0")
 }
 
-mainClassName = "com.personal.template.Main"
+mainClassName = "com.doit.schemamigration.Main"
 
 // Shadow Stuff
 jar {
@@ -64,7 +65,7 @@ jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                minimum = 1.0
+                minimum = 0.1
             }
         }
     }

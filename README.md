@@ -21,3 +21,10 @@ Dataflow Bigquery Schema Migrator Insert
   --project=<project name>  \
   --tempLocation=gs://<bucket-name>/staging
 ```
+
+## TODO
+
+* Accept more complex schema
+* Create process to put data in fail over table
+* Limit retries to 3, or some configurable number
+* MOAR tests need 100%

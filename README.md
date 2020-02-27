@@ -1,5 +1,21 @@
-# dataflow-bigquery-schema-migrator-insert
-Dataflow Bigquery Schema Migrator Insert
+# Dataflow Bigquery Schema Migrator Insert
+This pipeline accepts JSON Strings from Cloud PubSub, dynamically redirects that JSON Object based on a predefined key
+to a target BigQuery table, an attempt at inserting the data is made, if this fails the target table's  schema is adjusted to accomodate the incoming JSON Object such that,
+it is able to be inserted.
+
+![](docs/SchemaMigrator.png?raw=true)
+
+Please bear in mind mulitple tables can be updated all at once, do not set the window value too low.
+
+Example Dataflow pipeline:
+
+![](docs/SchemaMigratorDAG.png?raw=true)
+
+## Limitations 
+
+* Currently on flat JSON Data is accepted, this will change in future releases, no json arrays or json objects can be accepted as keys. This is due to polymorphic json issues.
+
+* Infinite retries, there is no limit on retries data can get stuck forever in the loop if there is an issue, in future releases all data will have a set number of retries.
 
 ## Requirements
 

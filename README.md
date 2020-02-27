@@ -1,5 +1,5 @@
 # Dataflow Bigquery Schema Migrator Insert
-This pipeline accepts JSON Strings from Cloud PubSub, dynamically redirects that JSON Object based on a predefined key
+This pipeline accepts JSON from Cloud PubSub, dynamically redirects that JSON Object based on a predefined key
 to a target BigQuery table, an attempt at inserting the data is made, if this fails the target table's  schema is adjusted to accomodate the incoming JSON Object such that,
 it is able to be inserted.
 
@@ -13,9 +13,28 @@ Example Dataflow pipeline:
 
 ## Limitations 
 
-* Currently on flat JSON Data is accepted, this will change in future releases, no json arrays or json objects can be accepted as keys. This is due to polymorphic json issues.
+* Currently only a flat JSON Object can be accepted, this will change in future releases. This means no JSON arrays or nested JSON objects can be accepted as keys in the JSON object. This is due to polymorphic JSON issues, not interacting well with BigQuery, the full list of acceptable types are as follows:
+  - Numeric Types: Integer and Longs
+  - Bytes: Byte and Byte[]
+  - Floating Point Types: Double and Float
+  - Limited Support for ISO datetime: following format only "yyyy-MM-dd HH:mm:ss" 
 
-* Infinite retries, there is no limit on retries data can get stuck forever in the loop if there is an issue, in future releases all data will have a set number of retries.
+Please see [TableRowToSchema.java](src/main/java/com/doit/schemamigration/Parsers/TableRowToSchema.java), for more information.
+
+Example acceptable object:
+```
+{"test":"test","counter":3}
+```
+Example for an unacceptable object, with a JSON array:
+```
+{"test":[1,2,3]}
+```
+Example for an unacceptable object, with a nested JSON object:
+```
+{"test":{"test":3}}
+```
+
+* Infinite retries, there is no limit on the number of retries. incoming JSON could get stuck forever, in the retry loop if there is an issue, in future releases all data will have a set number of retries.
 
 ## Requirements
 

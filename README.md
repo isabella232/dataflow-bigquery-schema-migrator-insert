@@ -1,7 +1,11 @@
 # Dataflow Bigquery Schema Migrator Insert
 This pipeline accepts JSON from Cloud PubSub, dynamically redirects that JSON Object based on a predefined key
-to a target BigQuery table, an attempt at inserting the data is made, if this fails the target table's  schema is adjusted to accomodate the incoming JSON Object such that,
-it is able to be inserted.
+to a target BigQuery table, an attempt at inserting the data is made, 
+if this fails data is gathered into window of n configurable minutes,  
+the data in this window is then keyed by target table and the incoming schema changes for each table are merged,
+this prevents multiple schema changes to bigquery every second, then
+the target table's schema is adjusted to accomodate the incoming JSON Object such that, it is able to be inserted,
+the failed data is sent back to the top of pubsub so it can be inserted via the process mentioned earlier.
 
 ![](docs/SchemaMigrator.png?raw=true)
 
@@ -60,6 +64,6 @@ Example for an unacceptable object, with a nested JSON object:
 ## TODO
 
 * Accept more complex schema
-* Create process to put data in fail over table
+* Create process to put bad data in fail over table
 * Limit retries to 3, or some configurable number
 * MOAR tests need 100%

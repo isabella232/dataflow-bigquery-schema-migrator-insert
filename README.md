@@ -39,6 +39,8 @@ Example for an unacceptable object, with a nested JSON object:
 
 * Infinite retries, there is no limit on the number of retries. incoming JSON could get stuck forever, in the retry loop if there is an issue, in future releases all data will have a set number of retries.
 
+* Still must use correct column and table names for Big Query see [here for column names](https://cloud.google.com/bigquery/docs/schemas#column_names) and [here for table names](https://cloud.google.com/bigquery/docs/tables#table_naming). No sanitation or validity checks of the table or columns names will be performed, bad data will end in bad data table. 
+
 ## Requirements
 
 * Java 8
@@ -63,6 +65,4 @@ Example for an unacceptable object, with a nested JSON object:
 ## TODO
 
 * Accept more complex schema
-* Create process to put bad data in fail over table
-* Limit retries to 3, or some configurable number
 * MOAR tests need 100%

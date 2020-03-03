@@ -1,4 +1,4 @@
-# Data ingestion in Big Query without the headaches
+# Data ingestion in Google Cloud Dataflow to Big Query without the headaches
 
 One of the problems with data injections is that plans change when it comes to the schema. Asking your DBA in the old days to migrate your columns always resulted in the largest of eye rolls. You want me to do what? and why? They'd ask, obviously they would give you a long turn around on making that simple change to the data structure just so you could have an additional field.
 

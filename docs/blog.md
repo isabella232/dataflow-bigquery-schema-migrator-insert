@@ -40,4 +40,4 @@ Schema after migration
 
 The more astute of you will have noticed a problem, what happens if there is a conflict? And the schemas can not be migrated? Yes, then the data will be stuck forever going around and around through PubSub, failing be inserted and attempting to migrate the schema and then being sent back to PubSub again. In future versions this will be addressed with a bad data table for failures. So it is easy to find out where and why that specific data was not inserted.
 
-More information can be found at the GitHub repo for this [project](https://github.com/doitintl/dataflow-bigquery-schema-migrator-insert). A big shout-out to DoIT International, for letting me open source this project and giving me feedback.
+More information can be found at the GitHub repo for this [project](https://github.com/doitintl/dataflow-bigquery-schema-migrator-insert). A big shout-out to DoiT International, for letting me open source this project and giving me feedback.

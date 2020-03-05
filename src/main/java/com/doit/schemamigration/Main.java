@@ -14,8 +14,8 @@ import static org.apache.beam.sdk.io.gcp.bigquery.InsertRetryPolicy.neverRetry;
 import static org.apache.beam.sdk.io.gcp.pubsub.PubsubIO.readStrings;
 
 import com.doit.schemamigration.Parsers.JsonToDestinationTable;
+import com.doit.schemamigration.Transforms.FailureAndRetryMechanism;
 import com.doit.schemamigration.Transforms.MergeWithTableSchema;
-import com.google.api.client.googleapis.util.Utils;
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
@@ -52,6 +52,8 @@ class Main {
         String.format("projects/%s/subscriptions/%s", projectName, topicName);
     final String topic = String.format("projects/%s/topics/%s", projectName, topicName);
     final String processedTimeJsonField = options.getJsonAttributeForProccess();
+    final String retryAttemptJsonField = options.getJsonAttributeForRetry();
+    final Integer numberOf = options.getNumberOfAllowedAttempts();
 
     // Ensure Dataset exists in bigquery
     final String datasetName = options.getTargetDataset();
@@ -77,7 +79,10 @@ class Main {
 
     final PCollection<TableRow> pubSubData =
         pubSubToJson(
-            pipeline, processedTimeJsonField, readStrings().fromSubscription(subscription));
+            pipeline,
+            processedTimeJsonField,
+            retryAttemptJsonField,
+            readStrings().fromSubscription(subscription));
 
     final PCollection<BigQueryInsertError> failedInserts =
         pubSubData
@@ -112,13 +117,8 @@ class Main {
     failedInserts
         .apply(
             "Get Table Data",
-            MapElements.into(TypeDescriptor.of(String.class))
-                .via(
-                    (BigQueryInsertError item) -> {
-                      final TableRow tableRow = item.getRow();
-                      tableRow.setFactory(Utils.getDefaultJsonFactory());
-                      return tableRow.toString();
-                    }))
+            new FailureAndRetryMechanism(
+                failOverTable, retryAttemptJsonField, numberOf, BigQueryIO.write()))
         .apply("Send Back to pubsub", PubsubIO.writeStrings().to(topic));
 
     pipeline.run();
@@ -151,6 +151,7 @@ class Main {
   public static PCollection<TableRow> pubSubToJson(
       final Pipeline pipeline,
       final String processedTimeJsonField,
+      final String retryAttemptJsonField,
       PubsubIO.Read<String> stringRead) {
     return pipeline
         .apply("Read PubSub Messages", stringRead)
@@ -162,10 +163,18 @@ class Main {
                         Stream.of(convert(ele))
                             .filter(tableRow -> !tableRow.isEmpty())
                             .peek(
-                                tableRow ->
-                                    tableRow.putIfAbsent(
-                                        processedTimeJsonField,
-                                        dateTimeFormatter.print(Instant.now())))
+                                tableRow -> {
+                                  tableRow.putIfAbsent(
+                                      processedTimeJsonField,
+                                      dateTimeFormatter.print(Instant.now()));
+                                  tableRow.set(
+                                      retryAttemptJsonField,
+                                      Integer.parseInt(
+                                              tableRow
+                                                  .getOrDefault(retryAttemptJsonField, 0)
+                                                  .toString())
+                                          + 1);
+                                })
                             .collect(toList())));
   }
 }

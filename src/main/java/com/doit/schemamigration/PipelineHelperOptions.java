@@ -29,6 +29,18 @@ public interface PipelineHelperOptions extends PipelineOptions, StreamingOptions
 
   void setJsonAttributeForProccess(final String value);
 
+  @Description("The name of json attribute for retry attempt to be stored in")
+  @Default.String("retry_attempt_number")
+  String getJsonAttributeForRetry();
+
+  void setJsonAttributeForRetry(final String value);
+
+  @Description("The number of allowed retries, before data is placed in bad data table")
+  @Default.Integer(3)
+  Integer getNumberOfAllowedAttempts();
+
+  void setNumberOfAllowedAttempts(final Integer value);
+
   @Description("The name of the full failure table.")
   @Required
   String getFailOverTableName();

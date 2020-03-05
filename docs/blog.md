@@ -6,7 +6,7 @@ What if you could perform data ingestion without worrying about the evolution of
 
 ![](SchemaMigrator.png?raw=true)
 
-This tool can create tables automatically based on a predefined key in your JSON object and it can modify the schema of those tables or pre-existing ones on the fly. What's the catch you ask; well to start with this pipeline can only deal with flat JSON object schemas, that means no nested objects or arrays in your JSON objects, and it can only gently evolve the schema, by that I mean add additional columns. Additional functionality will be added if there is a case for it, but for now it will remain simple and generic.
+This tool can create tables automatically based on a predefined key in your json schema and it can modify the schema of those tables or pre-existing ones on the fly. What’s the catch you ask; well to start with this pipeline can only deal with flat JSON object schemas, that means no nested objects or arrays in your JSON objects, and it can only gently evolve the schema, by that I mean add additional columns. Additional functionality will be added if there is a case for it, but for now it will remain simple and generic.
 
 The overview of the ingestion framework is is as follows, a PubSub topic with a Subscriber of the same name at the top, followed by a Cloud Dataflow pipeline and of course Google BigQuery. All of these tools scale very well and should be able to handle a large amount of data ingestion.
 

@@ -3,6 +3,7 @@ package com.doit.schemamigration;
 import static com.doit.schemamigration.Parsers.JsonToTableRow.convert;
 import static com.doit.schemamigration.Parsers.TableRowToSchema.convertToSchema;
 import static com.doit.schemamigration.Parsers.TableRowToSchema.dateTimeFormatter;
+import static com.doit.schemamigration.Transforms.MergeWithTableSchema.mergeSchemas;
 import static com.google.cloud.bigquery.BigQueryOptions.DefaultBigQueryFactory;
 import static com.google.cloud.bigquery.BigQueryOptions.newBuilder;
 import static java.util.stream.Collectors.toList;
@@ -21,14 +22,12 @@ import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
 import com.google.cloud.bigquery.BigQuery;
 import com.google.cloud.bigquery.DatasetInfo;
-import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.Schema;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
-import org.apache.beam.repackaged.core.org.antlr.v4.runtime.misc.OrderedHashSet;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.coders.CoderRegistry;
 import org.apache.beam.sdk.io.gcp.bigquery.*;
@@ -128,14 +127,7 @@ class Main {
     @Override
     public Schema apply(Iterable<Schema> input) {
       return StreamSupport.stream(input.spliterator(), false)
-          .reduce(
-              Schema.of(),
-              (Schema a, Schema b) -> {
-                final OrderedHashSet<Field> fields = new OrderedHashSet<>();
-                fields.addAll(a.getFields());
-                fields.addAll(b.getFields());
-                return Schema.of(fields);
-              });
+          .reduce(Schema.of(), (Schema a, Schema b) -> Schema.of(mergeSchemas(a, b)));
     }
   }
 

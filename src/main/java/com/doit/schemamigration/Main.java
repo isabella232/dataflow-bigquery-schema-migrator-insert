@@ -1,12 +1,7 @@
 package com.doit.schemamigration;
 
-import static com.doit.schemamigration.Parsers.JsonToTableRow.convert;
-import static com.doit.schemamigration.Parsers.TableRowToSchema.convertToSchema;
-import static com.doit.schemamigration.Parsers.TableRowToSchema.dateTimeFormatter;
-import static com.doit.schemamigration.Transforms.MergeWithTableSchema.mergeSchemas;
 import static com.google.cloud.bigquery.BigQueryOptions.DefaultBigQueryFactory;
 import static com.google.cloud.bigquery.BigQueryOptions.newBuilder;
-import static java.util.stream.Collectors.toList;
 import static org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED;
 import static org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.SchemaUpdateOption.ALLOW_FIELD_ADDITION;
 import static org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.SchemaUpdateOption.ALLOW_FIELD_RELAXATION;
@@ -15,8 +10,7 @@ import static org.apache.beam.sdk.io.gcp.bigquery.InsertRetryPolicy.neverRetry;
 import static org.apache.beam.sdk.io.gcp.pubsub.PubsubIO.readStrings;
 
 import com.doit.schemamigration.Parsers.JsonToDestinationTable;
-import com.doit.schemamigration.Transforms.FailureAndRetryMechanism;
-import com.doit.schemamigration.Transforms.MergeWithTableSchema;
+import com.doit.schemamigration.Transforms.*;
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
@@ -26,8 +20,6 @@ import com.google.cloud.bigquery.Schema;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.coders.CoderRegistry;
 import org.apache.beam.sdk.io.gcp.bigquery.*;
@@ -38,7 +30,6 @@ import org.apache.beam.sdk.transforms.windowing.FixedWindows;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.*;
 import org.joda.time.Duration;
-import org.joda.time.Instant;
 
 class Main {
   public static void main(String[] args) {
@@ -77,11 +68,11 @@ class Main {
         TypeDescriptor.of(BigQueryInsertError.class), BigQueryInsertErrorCoder.of());
 
     final PCollection<TableRow> pubSubData =
-        pubSubToJson(
-            pipeline,
-            processedTimeJsonField,
-            retryAttemptJsonField,
-            readStrings().fromSubscription(subscription));
+        pipeline
+            .apply("Read PubSub Messages", readStrings().fromSubscription(subscription))
+            .apply(
+                "Transform to Tablerow",
+                new PubSubToJSON(processedTimeJsonField, retryAttemptJsonField));
 
     final PCollection<BigQueryInsertError> failedInserts =
         pubSubData
@@ -121,52 +112,5 @@ class Main {
         .apply("Send Back to pubsub", PubsubIO.writeStrings().to(topic));
 
     pipeline.run();
-  }
-
-  static class CombineBySchema implements SerializableFunction<Iterable<Schema>, Schema> {
-    @Override
-    public Schema apply(Iterable<Schema> input) {
-      return StreamSupport.stream(input.spliterator(), false)
-          .reduce(Schema.of(), (Schema a, Schema b) -> Schema.of(mergeSchemas(a, b)));
-    }
-  }
-
-  static class KeyByDestTable extends DoFn<BigQueryInsertError, KV<String, Schema>> {
-    @ProcessElement
-    public void processElement(
-        @Element BigQueryInsertError error, OutputReceiver<KV<String, Schema>> out) {
-      // Use OutputReceiver.output to emit the output element.
-      out.output(KV.of(error.getTable().getTableId(), convertToSchema(error.getRow())));
-    }
-  }
-
-  public static PCollection<TableRow> pubSubToJson(
-      final Pipeline pipeline,
-      final String processedTimeJsonField,
-      final String retryAttemptJsonField,
-      PubsubIO.Read<String> stringRead) {
-    return pipeline
-        .apply("Read PubSub Messages", stringRead)
-        .apply(
-            "Convert data to json and add process timestamp",
-            FlatMapElements.into(TypeDescriptor.of(TableRow.class))
-                .via(
-                    (String ele) ->
-                        Stream.of(convert(ele))
-                            .filter(tableRow -> !tableRow.isEmpty())
-                            .peek(
-                                tableRow -> {
-                                  tableRow.putIfAbsent(
-                                      processedTimeJsonField,
-                                      dateTimeFormatter.print(Instant.now()));
-                                  tableRow.set(
-                                      retryAttemptJsonField,
-                                      Integer.parseInt(
-                                              tableRow
-                                                  .getOrDefault(retryAttemptJsonField, 0)
-                                                  .toString())
-                                          + 1);
-                                })
-                            .collect(toList())));
   }
 }

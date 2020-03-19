@@ -5,7 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
 public final class JsonToTableRow {
-  public static TableRow convert(final String json) {
+  public static TableRow convertFromString(final String json) {
     final Gson gson = new Gson();
     try {
       return gson.fromJson(json, TableRow.class);

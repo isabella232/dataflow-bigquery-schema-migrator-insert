@@ -61,11 +61,10 @@ public class MergeWithTableSchema
     }
   }
 
-  public void updateTargetTableSchema(final Schema tableAndSchema, final Table targetTable) {
+  public void updateTargetTableSchema(
+      final Schema incomingTableAndSchema, final Table targetTable) {
     final Schema targetTableSchema = targetTable.getDefinition().getSchema();
-    final OrderedHashSet<Field> fields = new OrderedHashSet<>();
-    fields.addAll(tableAndSchema.getFields());
-    fields.addAll(targetTableSchema != null ? targetTableSchema.getFields() : new ArrayList<>());
+    final OrderedHashSet<Field> fields = mergeSchemas(incomingTableAndSchema, targetTableSchema);
 
     if (targetTableSchema != null && fields.size() > targetTableSchema.getFields().size()) {
       logger.info("New schema is: {}", fields.toString());
@@ -84,5 +83,22 @@ public class MergeWithTableSchema
       return;
     }
     logger.warn("New schema not created");
+  }
+
+  public static OrderedHashSet<Field> mergeSchemas(
+      Schema incomingTableAndSchema, Schema targetTableSchema) {
+    final OrderedHashSet<Field> fields = new OrderedHashSet<>();
+    fields.addAll(targetTableSchema != null ? targetTableSchema.getFields() : new ArrayList<>());
+    incomingTableAndSchema
+        .getFields()
+        .forEach(
+            field -> {
+              final Optional<Field> doesFieldKeyExist =
+                  fields.stream().filter(item -> item.getName().equals(field.getName())).findAny();
+              if (!doesFieldKeyExist.isPresent()) {
+                fields.add(field);
+              }
+            });
+    return fields;
   }
 }

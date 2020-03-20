@@ -10,6 +10,6 @@ public class CombineBySchema implements SerializableFunction<Iterable<Schema>, S
   @Override
   public Schema apply(Iterable<Schema> input) {
     return StreamSupport.stream(input.spliterator(), false)
-        .reduce(Schema.of(), (Schema a, Schema b) -> Schema.of(mergeSchemas(a, b)));
+        .reduce(Schema.of(), (Schema a, Schema b) -> Schema.of(mergeSchemas(b, a)));
   }
 }

@@ -9,9 +9,9 @@ import org.apache.beam.sdk.values.KV;
 
 public class KeyByDestTable extends DoFn<BigQueryInsertError, KV<String, Schema>> {
   @ProcessElement
-  public void processElement(
-      @Element BigQueryInsertError error, OutputReceiver<KV<String, Schema>> out) {
+  public void processElement(final ProcessContext context) {
     // Use OutputReceiver.output to emit the output element.
-    out.output(KV.of(error.getTable().getTableId(), convertToSchema(error.getRow())));
+    final BigQueryInsertError error = context.element();
+    context.output(KV.of(error.getTable().getTableId(), convertToSchema(error.getRow())));
   }
 }

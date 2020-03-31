@@ -22,6 +22,7 @@ dependencies {
     implementation("org.apache.beam:beam-runners-google-cloud-dataflow-java:$beamVersion")
     implementation("org.apache.beam:beam-sdks-java-io-google-cloud-platform:$beamVersion")
     implementation('com.google.cloud:google-cloud-bigquery:1.106.0')
+    implementation('com.owlike:genson:1.6')
     implementation("org.slf4j:slf4j-jdk14:$slf4jVersion")
     implementation("org.slf4j:slf4j-api:$slf4jVersion")
 

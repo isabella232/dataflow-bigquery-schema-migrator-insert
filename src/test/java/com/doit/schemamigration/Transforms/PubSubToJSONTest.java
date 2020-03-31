@@ -25,4 +25,21 @@ public class PubSubToJSONTest {
     PAssert.that(result).containsInAnyOrder(expectedResult);
     pipeline.run();
   }
+
+  @Test
+  public void retriedData() {
+    final PubSubToJSON pubSubToJSON = new PubSubToJSON("time", "retry");
+    final PCollection<String> testJSON =
+        pipeline.apply(
+            "Create fake json data, with a single retry",
+            Create.of("{\"a\":\"a\",\"time\":\"time\", \"retry\":1}"));
+    final PCollection<TableRow> result = pubSubToJSON.expand(testJSON);
+
+    final TableRow expectedResult = new TableRow();
+    expectedResult.set("a", "a");
+    expectedResult.set("time", "time");
+    expectedResult.set("retry", 2);
+    PAssert.that(result).containsInAnyOrder(expectedResult);
+    pipeline.run();
+  }
 }

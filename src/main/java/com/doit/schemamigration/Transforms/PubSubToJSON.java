@@ -37,10 +37,7 @@ public class PubSubToJSON extends PTransform<PCollection<String>, PCollection<Ta
                               tableRow.set(
                                   retryAttemptJsonField,
                                   Integer.parseInt(
-                                          tableRow
-                                              .getOrDefault(retryAttemptJsonField, 0)
-                                              .toString())
-                                      + 1);
+                                      tableRow.getOrDefault(retryAttemptJsonField, 0).toString()));
                             })
                         .collect(toList())));
   }

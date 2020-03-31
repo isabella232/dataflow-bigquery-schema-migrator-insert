@@ -1,5 +1,6 @@
 package com.doit.schemamigration.Transforms;
 
+import static com.doit.schemamigration.Parsers.TableRowToSchema.dateTimeFormatter;
 import static java.util.Arrays.asList;
 import static org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED;
 import static org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.WriteDisposition.WRITE_APPEND;
@@ -16,31 +17,45 @@ import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.values.*;
+import org.joda.time.DateTime;
+import org.joda.time.Duration;
+import org.joda.time.Instant;
+import org.joda.time.Minutes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class FailureAndRetryMechanism
     extends PTransform<PCollection<BigQueryInsertError>, PCollection<String>> {
+  final Logger logger = LoggerFactory.getLogger(FailureAndRetryMechanism.class);
   static final TableSchema failOverSchema =
       new TableSchema()
           .setFields(
               asList(
                   new TableFieldSchema().setName("bad_data").setType("STRING"),
                   new TableFieldSchema().setName("table_dest").setType("STRING"),
-                  new TableFieldSchema().setName("error").setType("STRING")));
+                  new TableFieldSchema().setName("error").setType("STRING"),
+                  new TableFieldSchema().setName("insert_time").setType("DATETIME")));
   static final TupleTag<BigQueryInsertError> retry = new TupleTag<>();
   static final TupleTag<BigQueryInsertError> dump = new TupleTag<>();
   static final TupleTag<BigQueryInsertError> all = new TupleTag<>();
   final String failOverTable;
   final String retryAttemptJsonField;
+  final String processedTimeJsonField;
+  final Duration windowSize;
   final Integer numberOfAllowedAttempts;
   final BigQueryIO.Write<BigQueryInsertError> write;
 
   public FailureAndRetryMechanism(
       final String failOverTable,
       final String retryAttemptJsonField,
+      final String processedTimeJsonField,
+      final Duration windowSize,
       final Integer numberOfAllowedAttempts,
       final BigQueryIO.Write<BigQueryInsertError> write) {
     this.retryAttemptJsonField = retryAttemptJsonField;
     this.numberOfAllowedAttempts = numberOfAllowedAttempts;
+    this.processedTimeJsonField = processedTimeJsonField;
+    this.windowSize = windowSize;
     this.failOverTable = failOverTable;
     this.write = write;
   }
@@ -50,7 +65,7 @@ public class FailureAndRetryMechanism
     final PCollectionTuple failures =
         input.apply(
             "Split out data not going to be retried",
-            ParDo.of(new TagData()).withOutputTags(all, TupleTagList.of(asList(retry, dump))));
+            ParDo.of(new TagData()).withOutputTags(all, TupleTagList.of(retry).and(dump)));
 
     failures
         .get(dump)
@@ -62,9 +77,10 @@ public class FailureAndRetryMechanism
                 .withFormatFunction(
                     (BigQueryInsertError error) -> {
                       final TableRow tableRow = new TableRow();
-                      tableRow.set("bad_data", error.getRow());
+                      tableRow.set("bad_data", error.getRow().toString());
                       tableRow.set("table_dest", error.getTable().getTableId());
                       tableRow.set("error", error.getError().toString());
+                      tableRow.set("insert_time", dateTimeFormatter.print(Instant.now()));
                       return tableRow;
                     })
                 .withCreateDisposition(CREATE_IF_NEEDED)
@@ -87,15 +103,33 @@ public class FailureAndRetryMechanism
 
   class TagData extends DoFn<BigQueryInsertError, BigQueryInsertError> {
     @ProcessElement
-    public void processElement(final ProcessContext c) {
-      final BigQueryInsertError element = c.element();
+    public void processElement(@Element BigQueryInsertError element, MultiOutputReceiver out) {
       final int retryAttemptNumber =
           Integer.parseInt(element.getRow().getOrDefault(retryAttemptJsonField, 0).toString());
-      if (retryAttemptNumber > numberOfAllowedAttempts) {
-        c.output(dump, element);
+
+      if (retryAttemptNumber < numberOfAllowedAttempts) {
+        final TableRow updatedTableRow = element.getRow().clone();
+
+        final DateTime processedTime =
+            dateTimeFormatter.parseDateTime(
+                element
+                    .getRow()
+                    .getOrDefault(processedTimeJsonField, dateTimeFormatter.print(Instant.now()))
+                    .toString());
+        final long updatedRetryAttemptNumber =
+            Minutes.minutesBetween(processedTime, Instant.now()).getMinutes()
+                / windowSize.getStandardMinutes();
+
+        updatedTableRow.set(retryAttemptJsonField, updatedRetryAttemptNumber);
+
+        final BigQueryInsertError updatedInsertError =
+            new BigQueryInsertError(updatedTableRow, element.getError(), element.getTable());
+
+        out.get(retry).output(updatedInsertError);
       } else {
-        c.output(retry, element);
+        out.get(dump).output(element);
       }
+      out.get(all).output(element);
     }
   }
 }

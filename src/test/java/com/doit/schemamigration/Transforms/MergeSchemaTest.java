@@ -10,13 +10,13 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
-public class MergeWithTableSchemaTest {
-  private MergeWithTableSchema mergeWithTableSchema;
+public class MergeSchemaTest {
+  private MergeSchema mergeSchema;
 
   @Before
   public void setup() {
-    mergeWithTableSchema.bigQuery = mock(BigQuery.class);
-    mergeWithTableSchema = new MergeWithTableSchema("test", "test");
+    mergeSchema.bigQuery = mock(BigQuery.class);
+    mergeSchema = new MergeSchema("test", "test");
   }
 
   @Test
@@ -29,7 +29,7 @@ public class MergeWithTableSchemaTest {
     when(tableDefinition.getSchema())
         .thenReturn(Schema.of(Field.of("a", StandardSQLTypeName.STRING)));
 
-    mergeWithTableSchema.updateTargetTableSchema(incomingSchema, table);
+    mergeSchema.updateTargetTableSchema(incomingSchema, table);
     assertThat(table.getDefinition().getSchema(), is(equalTo(incomingSchema)));
   }
 
@@ -52,7 +52,7 @@ public class MergeWithTableSchemaTest {
     when(builder.build()).thenReturn(table);
     when(table.update()).thenReturn(table);
 
-    mergeWithTableSchema.updateTargetTableSchema(incomingSchema, table);
+    mergeSchema.updateTargetTableSchema(incomingSchema, table);
     final ArgumentCaptor<TableDefinition> tableDefinitionCaptor =
         ArgumentCaptor.forClass(TableDefinition.class);
     verify(builder).setDefinition(tableDefinitionCaptor.capture());
@@ -78,7 +78,7 @@ public class MergeWithTableSchemaTest {
     when(builder.build()).thenReturn(table);
     when(table.update()).thenReturn(table);
 
-    mergeWithTableSchema.updateTargetTableSchema(incomingSchema, table);
+    mergeSchema.updateTargetTableSchema(incomingSchema, table);
     final ArgumentCaptor<TableDefinition> tableDefinitionCaptor =
         ArgumentCaptor.forClass(TableDefinition.class);
     verify(builder).setDefinition(tableDefinitionCaptor.capture());

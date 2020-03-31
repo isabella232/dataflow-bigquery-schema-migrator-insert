@@ -14,12 +14,14 @@ public final class JsonToTableRow {
   public static TableRow convertFromString(final String json) {
     final TableRow out = new TableRow();
     final Genson genson = new Genson();
+    logger.debug("Incoming jsonString: {}", json);
     try {
       final HashMap<String, Object> convertedObject = genson.deserialize(json, HashMap.class);
       out.putAll(convertedObject);
     } catch (JsonBindingException | JsonStreamException | NullPointerException e) {
       logger.debug("Failed to parse message:\n {}\nException thrown: {}", json, e);
     }
+    logger.debug("Outgoing tablerow: {}", out.toString());
     return out;
   }
 }

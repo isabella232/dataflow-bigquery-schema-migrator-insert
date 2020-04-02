@@ -1,6 +1,6 @@
 package com.doit.schemamigration.Transforms;
 
-import static com.doit.schemamigration.Transforms.MergeWithTableSchema.mergeSchemas;
+import static com.doit.schemamigration.Transforms.MergeSchema.mergeSchemas;
 
 import com.google.cloud.bigquery.Schema;
 import java.util.stream.StreamSupport;

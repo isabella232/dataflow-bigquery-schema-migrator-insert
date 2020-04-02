@@ -26,8 +26,7 @@ import org.apache.beam.sdk.io.gcp.bigquery.*;
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.transforms.*;
-import org.apache.beam.sdk.transforms.windowing.FixedWindows;
-import org.apache.beam.sdk.transforms.windowing.Window;
+import org.apache.beam.sdk.transforms.windowing.*;
 import org.apache.beam.sdk.values.*;
 import org.joda.time.Duration;
 
@@ -44,6 +43,7 @@ class Main {
     final String processedTimeJsonField = options.getJsonAttributeForProccess();
     final String retryAttemptJsonField = options.getJsonAttributeForRetry();
     final Integer numberOf = options.getNumberOfAllowedAttempts();
+    final Duration windowSize = Duration.standardMinutes(options.getWindowSize());
 
     // Ensure Dataset exists in bigquery
     final String datasetName = options.getTargetDataset();
@@ -82,7 +82,7 @@ class Main {
                     .to(
                         (input) ->
                             JsonToDestinationTable.getTableName(
-                                input, projectName, datasetName, targetTableAtt, failOverTable))
+                                input, projectName, datasetName, targetTableAtt))
                     .withCreateDisposition(CREATE_IF_NEEDED)
                     .withSchema(dummySchema)
                     .withWriteDisposition(WRITE_APPEND)
@@ -96,19 +96,30 @@ class Main {
         .apply("Key by table", ParDo.of(new KeyByDestTable()))
         .apply(
             "Gather up schema changes",
-            Window.<KV<String, Schema>>into(
-                    FixedWindows.of(Duration.standardMinutes(options.getWindowSize())))
-                .withAllowedLateness(Duration.ZERO))
+            Window.<KV<String, Schema>>into(FixedWindows.of(windowSize))
+                .withAllowedLateness(Duration.standardSeconds(1L))
+                .discardingFiredPanes()
+                .triggering(
+                    Repeatedly.forever(
+                        AfterFirst.of(
+                            // Don't try to hard bruh
+                            AfterPane.elementCountAtLeast(1000000),
+                            AfterProcessingTime.pastFirstElementInPane().plusDelayOf(windowSize)))))
         .apply("Combine by Schema", Combine.perKey(new CombineBySchema()))
         .apply(
-            "Merge with target table schema", new MergeWithTableSchema(projectName, datasetName));
+            "Merge with target table schema", ParDo.of(new MergeSchema(projectName, datasetName)));
 
     // Send failed rows back to pubsub
     failedInserts
         .apply(
-            "Get Table Data",
+            "Fail or Retry",
             new FailureAndRetryMechanism(
-                failOverTable, retryAttemptJsonField, numberOf, BigQueryIO.write()))
+                failOverTable,
+                retryAttemptJsonField,
+                processedTimeJsonField,
+                windowSize,
+                numberOf,
+                BigQueryIO.write()))
         .apply("Send Back to pubsub", PubsubIO.writeStrings().to(topic));
 
     pipeline.run();

@@ -21,7 +21,7 @@ public class PubSubToJSONTest {
     final TableRow expectedResult = new TableRow();
     expectedResult.set("a", "a");
     expectedResult.set("time", "time");
-    expectedResult.set("retry", 1);
+    expectedResult.set("retry", 0);
     PAssert.that(result).containsInAnyOrder(expectedResult);
     pipeline.run();
   }
@@ -38,7 +38,7 @@ public class PubSubToJSONTest {
     final TableRow expectedResult = new TableRow();
     expectedResult.set("a", "a");
     expectedResult.set("time", "time");
-    expectedResult.set("retry", 2);
+    expectedResult.set("retry", 1);
     PAssert.that(result).containsInAnyOrder(expectedResult);
     pipeline.run();
   }

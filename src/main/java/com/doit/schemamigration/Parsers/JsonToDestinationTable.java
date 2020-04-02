@@ -11,11 +11,10 @@ public final class JsonToDestinationTable {
       final ValueInSingleWindow<TableRow> tableRow,
       final String projectName,
       final String datasetName,
-      final String tableNameAttr,
-      final String failOverTableName) {
+      final String tableNameAttr) {
     final String tableDest =
         requireNonNull(tableRow.getValue())
-            .getOrDefault(tableNameAttr, failOverTableName)
+            .getOrDefault(tableNameAttr, "FAILED.TO.PROVIDE.VALID.TABLENAME")
             .toString();
 
     return new TableDestination(

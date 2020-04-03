@@ -116,11 +116,16 @@ public class FailureAndRetryMechanism
                     .getRow()
                     .getOrDefault(processedTimeJsonField, dateTimeFormatter.print(Instant.now()))
                     .toString());
-        final long updatedRetryAttemptNumber =
-            Minutes.minutesBetween(processedTime, Instant.now()).getMinutes()
-                / windowSize.getStandardMinutes();
 
-        updatedTableRow.set(retryAttemptJsonField, updatedRetryAttemptNumber);
+        if (retryAttemptNumber == 0) {
+          updatedTableRow.set(retryAttemptJsonField, 1);
+        } else {
+          final long updatedRetryAttemptNumber =
+              Minutes.minutesBetween(processedTime, Instant.now()).getMinutes()
+                  / windowSize.getStandardMinutes();
+
+          updatedTableRow.set(retryAttemptJsonField, updatedRetryAttemptNumber);
+        }
 
         final BigQueryInsertError updatedInsertError =
             new BigQueryInsertError(updatedTableRow, element.getError(), element.getTable());

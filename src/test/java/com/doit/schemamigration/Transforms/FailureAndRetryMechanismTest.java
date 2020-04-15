@@ -105,8 +105,11 @@ public class FailureAndRetryMechanismTest {
 
     final PCollection<String> result = retryMechanism.expand(errorCollection);
 
-    retriedData.setFactory(Utils.getDefaultJsonFactory());
-    PAssert.that(result).containsInAnyOrder(retriedData.toString());
+    final TableRow expectedResult = retriedData.clone();
+    expectedResult.set("retry", 1);
+    expectedResult.setFactory(Utils.getDefaultJsonFactory());
+
+    PAssert.that(result).containsInAnyOrder(expectedResult.toString());
 
     p.run();
   }

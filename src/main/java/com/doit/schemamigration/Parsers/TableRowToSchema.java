@@ -1,5 +1,7 @@
 package com.doit.schemamigration.Parsers;
 
+import static com.google.cloud.bigquery.StandardSQLTypeName.ARRAY;
+import static com.google.cloud.bigquery.StandardSQLTypeName.STRUCT;
 import static java.util.stream.Collectors.toList;
 
 import com.google.api.services.bigquery.model.TableRow;
@@ -9,6 +11,7 @@ import com.google.cloud.bigquery.StandardSQLTypeName;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
@@ -19,22 +22,28 @@ public final class TableRowToSchema {
 
   public static Schema convertToSchema(final TableRow tableRow) {
     final List<Field> fields =
-        tableRow
-            .entrySet()
-            .stream()
-            .map(item -> Field.of(item.getKey(), findType(item.getValue())))
-            .collect(toList());
+        tableRow.entrySet().stream().map(item -> convertToField(item)).collect(toList());
     return Schema.of(fields);
+  }
+
+  public static Field convertToField(Map.Entry<String, Object> item) {
+    final StandardSQLTypeName typeName = findType(item.getValue());
+    switch (typeName) {
+      case ARRAY:
+        return null;
+      case STRUCT:
+        return null;
+      default:
+        return Field.of(item.getKey(), typeName);
+    }
   }
 
   static StandardSQLTypeName findType(final Object object) {
     if (object instanceof HashMap) {
-      logger.error("Can't parse: {}", object.toString());
-      throw new IllegalStateException("Type Record not implemented Yet");
+      return STRUCT;
     }
     if (object instanceof Collection) {
-      logger.error("Can't parse: {}", object.toString());
-      throw new IllegalStateException("Type Repeated not implemented Yet");
+      return ARRAY;
     }
     return findSimpleType(object);
   }

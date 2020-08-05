@@ -9,7 +9,7 @@ plugins {
 
 group = 'com.doit.schemamigration'
 version = '1.0.0'
-def beamVersion = "2.19.0"
+def beamVersion = "2.23.0"
 def slf4jVersion = "1.7.30"
 
 repositories {
